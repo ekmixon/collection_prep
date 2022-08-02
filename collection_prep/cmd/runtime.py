@@ -26,8 +26,7 @@ REMOVAL_DAY_OF_MONTH = "01"
 
 
 def get_warning_msg(plugin_name=None):
-    depcrecation_msg = "See the plugin documentation for more details"
-    return depcrecation_msg
+    return "See the plugin documentation for more details"
 
 
 def process_runtime_plugin_routing(collection, path):
@@ -71,22 +70,21 @@ def process_runtime_plugin_routing(collection, path):
         # handle action plugin redirection
         # if module name and action name is same skip the redirection as Ansible
         # by design will invoke action plugin first.
-        if not os.path.exists(os.path.join(action_path, f"{module_name}.py")):
-            if (
-                os.path.exists(
-                    os.path.join(action_path, f"{module_prefix}.py")
-                )
-                and module_prefix == collection_name
-            ):
-                fq_action_name = f"{collection}.{module_prefix}"
-                if not plugin_routing.get("action"):
-                    plugin_routing["action"] = {}
-                plugin_routing["action"].update(
-                    {module_name: {"redirect": fq_action_name}}
-                )
-                plugin_routing["action"].update(
-                    {short_name: {"redirect": fq_action_name}}
-                )
+        if not os.path.exists(
+            os.path.join(action_path, f"{module_name}.py")
+        ) and (
+            os.path.exists(os.path.join(action_path, f"{module_prefix}.py"))
+            and module_prefix == collection_name
+        ):
+            fq_action_name = f"{collection}.{module_prefix}"
+            if not plugin_routing.get("action"):
+                plugin_routing["action"] = {}
+            plugin_routing["action"].update(
+                {module_name: {"redirect": fq_action_name}}
+            )
+            plugin_routing["action"].update(
+                {short_name: {"redirect": fq_action_name}}
+            )
 
         # handle module short name redirection.
         # Add short redirection if module prefix and collection name is same
@@ -136,17 +134,15 @@ def process_runtime_plugin_routing(collection, path):
 
 
 def process(collection, path):
-    rt_obj = {}
     collection_path = os.path.join(path, collection)
     if not os.path.exists(collection_path):
         logging.error(f"{collection_path} does not exit")
 
     supported_ansible_versions = COLLECTION_MIN_ANSIBLE_VERSION
     if COLLECTION_MAX_ANSIBLE_VERSION:
-        supported_ansible_versions += "," + COLLECTION_MAX_ANSIBLE_VERSION
-    rt_obj["requires_ansible"] = supported_ansible_versions
-    plugin_routing = process_runtime_plugin_routing(collection, path)
-    if plugin_routing:
+        supported_ansible_versions += f",{COLLECTION_MAX_ANSIBLE_VERSION}"
+    rt_obj = {"requires_ansible": supported_ansible_versions}
+    if plugin_routing := process_runtime_plugin_routing(collection, path):
         rt_obj["plugin_routing"] = plugin_routing
 
     # create meta/runtime.yml file

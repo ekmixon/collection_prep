@@ -69,9 +69,7 @@ def ensure_list(value):
     :type value: Unknown
     :return: The value as a list
     """
-    if isinstance(value, list):
-        return value
-    return [value]
+    return value if isinstance(value, list) else [value]
 
 
 def convert_descriptions(data):
@@ -110,8 +108,7 @@ def jinja_environment():
     env.filters["html_ify"] = html_ify
     env.globals["to_kludge_ns"] = to_kludge_ns
     env.globals["from_kludge_ns"] = from_kludge_ns
-    template = env.get_template("plugin.rst.j2")
-    return template
+    return env.get_template("plugin.rst.j2")
 
 
 def update_readme(content, path, gh_url, branch_name):
@@ -142,10 +139,8 @@ def update_readme(content, path, gh_url, branch_name):
                 )
             )
             if "_description" in plugins:
-                data.append(plugins.pop("_description"))
-                data.append("")
-        data.append("Name | Description")
-        data.append("--- | ---")
+                data.extend((plugins.pop("_description"), ""))
+        data.extend(("Name | Description", "--- | ---"))
         for plugin, info in sorted(plugins.items()):
             if info["has_rst"]:
                 link = "[{plugin}]({gh_url}/blob/{branch_name}/docs/{plugin}_{plugin_type}.rst)".format(
@@ -179,7 +174,7 @@ def update_readme(content, path, gh_url, branch_name):
         logging.error("README.md not updated")
         sys.exit(1)
     if start and end:
-        new = content[0 : start + 1] + data + content[end:]
+        new = content[:start + 1] + data + content[end:]
         with open(readme, "w") as fhand:
             fhand.write("\n".join(new))
             # Avoid "No newline at end of file.
@@ -215,8 +210,7 @@ def handle_simple(collection, fullpath, kind):
         sys.exit(1)
 
     plugins = {}
-    with open(fullpath) as fhand:
-        file_contents = fhand.read()
+    file_contents = Path(fullpath).read_text()
     module = ast.parse(file_contents)
     function_definitions = {
         node.name: ast.get_docstring(node)
@@ -230,10 +224,8 @@ def handle_simple(collection, fullpath, kind):
     ]
     if not classdef:
         return plugins
-    else:
-        docstring = ast.get_docstring(classdef[0], clean=True)
-        if docstring:
-            plugins["_description"] = docstring.strip()
+    if docstring := ast.get_docstring(classdef[0], clean=True):
+        plugins["_description"] = docstring.strip()
 
     simple_map = next(
         (
@@ -247,24 +239,24 @@ def handle_simple(collection, fullpath, kind):
     )
 
     if not simple_map:
-        simple_func = [
+        if simple_func := [
             func
             for func in classdef[0].body
             if isinstance(func, ast.FunctionDef) and func.name == func_name
-        ]
-        if not simple_func:
-            return plugins
+        ]:
+            # The filter map is either looked up using the filter_map = {} assignment or if return returns a dict literal.
+            simple_map = next(
+                (
+                    node
+                    for node in simple_func[0].body
+                    if isinstance(node, ast.Return)
+                    and isinstance(node.value, ast.Dict)
+                ),
+                None,
+            )
 
-        # The filter map is either looked up using the filter_map = {} assignment or if return returns a dict literal.
-        simple_map = next(
-            (
-                node
-                for node in simple_func[0].body
-                if isinstance(node, ast.Return)
-                and isinstance(node.value, ast.Dict)
-            ),
-            None,
-        )
+        else:
+            return plugins
 
     if not simple_map:
         return plugins
@@ -291,7 +283,7 @@ def handle_simple(collection, fullpath, kind):
     return plugins
 
 
-def process(collection, path):  # pylint: disable-msg=too-many-locals
+def process(collection, path):    # pylint: disable-msg=too-many-locals
     """
     Process the files in each subdirectory
 
@@ -311,11 +303,7 @@ def process(collection, path):  # pylint: disable-msg=too-many-locals
     content = {}
 
     for subdir in SUBDIRS:
-        if subdir == "modules":
-            plugin_type = "module"
-        else:
-            plugin_type = subdir
-
+        plugin_type = "module" if subdir == "modules" else subdir
         dirpath = Path(path, "plugins", subdir)
         if dirpath.is_dir():
             content[subdir] = {}
@@ -332,61 +320,60 @@ def process(collection, path):  # pylint: disable-msg=too-many-locals
                     ) = plugin_docs.get_docstring(fullpath, fragment_loader)
                     if doc is None and subdir in ["filter", "test"]:
                         name_only = filename.rsplit(".")[0]
-                        combined_ptype = "%s %s" % (name_only, subdir)
+                        combined_ptype = f"{name_only} {subdir}"
                         content[combined_ptype] = handle_simple(
                             collection, fullpath, subdir
                         )
-                    else:
-                        if doc:
-                            doc["plugin_type"] = plugin_type
+                    elif doc:
+                        doc["plugin_type"] = plugin_type
 
-                            if returndocs:
+                        if returndocs:
                                 # Seems a recent change in devel makes this return a dict not a yaml string.
-                                if isinstance(returndocs, dict):
-                                    doc["returndocs"] = returndocs
-                                else:
-                                    doc["returndocs"] = yaml.safe_load(
-                                        returndocs
-                                    )
-                                convert_descriptions(doc["returndocs"])
-
-                            doc["metadata"] = (metadata,)
-                            if isinstance(examples, string_types):
-                                doc["plainexamples"] = examples.strip()
-                            else:
-                                doc["examples"] = examples
-
-                            doc[
-                                "module"
-                            ] = "{collection}.{plugin_name}".format(
-                                collection=collection,
-                                plugin_name=doc.get(
-                                    plugin_type, doc.get("name")
-                                ),
-                            )
-                            doc["author"] = ensure_list(doc["author"])
-                            doc["description"] = ensure_list(
-                                doc["description"]
-                            )
-                            try:
-                                convert_descriptions(doc["options"])
-                            except KeyError:
-                                pass  # This module takes no options
-
-                            module_rst_path = Path(
-                                path,
-                                "docs",
-                                doc["module"]
-                                + "_{0}".format(plugin_type)
-                                + ".rst",
+                            doc["returndocs"] = (
+                                returndocs
+                                if isinstance(returndocs, dict)
+                                else yaml.safe_load(returndocs)
                             )
 
-                            with open(module_rst_path, "w") as fd:
-                                fd.write(template.render(doc))
-                            content[subdir][doc["module"]] = {
-                                "has_rst": True,
-                                "comment": doc["short_description"],
-                            }
+                            convert_descriptions(doc["returndocs"])
+
+                        doc["metadata"] = (metadata,)
+                        if isinstance(examples, string_types):
+                            doc["plainexamples"] = examples.strip()
+                        else:
+                            doc["examples"] = examples
+
+                        doc[
+                            "module"
+                        ] = "{collection}.{plugin_name}".format(
+                            collection=collection,
+                            plugin_name=doc.get(
+                                plugin_type, doc.get("name")
+                            ),
+                        )
+                        doc["author"] = ensure_list(doc["author"])
+                        doc["description"] = ensure_list(
+                            doc["description"]
+                        )
+                        try:
+                            convert_descriptions(doc["options"])
+                        except KeyError:
+                            pass  # This module takes no options
+
+                        module_rst_path = Path(
+                            path,
+                            "docs",
+                            doc["module"]
+                            + "_{0}".format(plugin_type)
+                            + ".rst",
+                        )
+
+                        with open(module_rst_path, "w") as fd:
+                            fd.write(template.render(doc))
+                        content[subdir][doc["module"]] = {
+                            "has_rst": True,
+                            "comment": doc["short_description"],
+                        }
     return content
 
 
@@ -498,7 +485,7 @@ def add_ansible_compatibility(runtime, path):
         data = ANSIBLE_COMPAT.format(
             requires_ansible=requires_ansible
         ).splitlines()
-        new = content[0 : start + 1] + data + content[end:]
+        new = content[:start + 1] + data + content[end:]
         with open(readme, "w") as fhand:
             fhand.write("\n".join(new))
         logging.info(

@@ -21,11 +21,7 @@ def get_removed_at_date():
     else:
         depcrecation_month = today.month
 
-    depcrecation_date = (
-        f"{deprecation_year}-{depcrecation_month:02d}-{REMOVAL_DAY_OF_MONTH}"
-    )
-
-    return depcrecation_date
+    return f"{deprecation_year}-{depcrecation_month:02d}-{REMOVAL_DAY_OF_MONTH}"
 
 
 def load_py_as_ast(path):
@@ -49,5 +45,4 @@ def find_assigment_in_ast(name, ast_file):
     :param ast_file: The ast object
     :return: A list of ast object matching
     """
-    res = ast_file.find("assignment", target=lambda x: x.dumps() == name)
-    return res
+    return ast_file.find("assignment", target=lambda x: x.dumps() == name)

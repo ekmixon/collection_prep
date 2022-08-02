@@ -59,7 +59,7 @@ def rst_ify(text):
         t = _CONST.sub(r"``\1``", t)
         t = _RULER.sub(r"------------", t)
     except Exception as e:
-        raise AnsibleError("Could not process (%s) : %s" % (text, e))
+        raise AnsibleError(f"Could not process ({text}) : {e}")
 
     return t
 
@@ -75,6 +75,4 @@ def documented_type(text):
         return "boolean"
     if text == "int":
         return "integer"
-    if text == "dict":
-        return "dictionary"
-    return text
+    return "dictionary" if text == "dict" else text

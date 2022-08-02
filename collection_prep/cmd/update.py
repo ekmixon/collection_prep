@@ -40,8 +40,7 @@ def remove_assigment_in_ast(name, ast_file):
     :param name: The name of the assignement to remove
     :param ast_file: The ast object
     """
-    res = ast_file.find("assignment", target=lambda x: x.dumps() == name)
-    if res:
+    if res := ast_file.find("assignment", target=lambda x: x.dumps() == name):
         ast_file.remove(res)
 
 
@@ -61,8 +60,7 @@ def retrieve_plugin_name(plugin_type, bodypart):
 
     if plugin_type == "modules":
         plugin_type = "module"
-    name = documentation[plugin_type]
-    return name
+    return documentation[plugin_type]
 
 
 def update_deprecation_notice(documentation):
@@ -179,10 +177,7 @@ def update_short_description(retrn, documentation, module_name):
             parts = module_name.split("_")
             # things like 'interfaces'
             resource = parts[1].lower()
-            if resource in SPECIALS:
-                resource = SPECIALS[resource]
-            else:
-                resource = resource.upper()
+            resource = SPECIALS[resource] if resource in SPECIALS else resource.upper()
             if resource.lower()[-1].endswith("s"):
                 chars = list(resource)
                 chars[-1] = chars[-1].lower()
